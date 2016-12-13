@@ -3,25 +3,26 @@
 namespace Drupal\domain_config_ui\Config;
 
 use Drupal\Core\Config\Config as CoreConfig;
-use Drupal\domain_config_ui\DomainConfigUIManager;
+use Drupal\domain\DomainNegotiatorInterface;
 
 /**
  * Extend core Config class to save domain specific configuration.
  */
 class Config extends CoreConfig {
   /**
-   * The Domain config UI manager.
+   * The Domain negotiator.
    *
-   * @var DomainConfigUIManager
+   * @var DomainNegotiatorInterface
    */
-  protected $domainConfigUIManager;
+  protected $domainNegotiator;
 
   /**
-   * Set the Domain config UI manager.
-   * @param DomainConfigUIManager $domain_config_ui_manager
+   * Set the Domain negotiator.
+   *
+   * @param DomainNegotiatorInterface $domain_negotiator
    */
-  public function setDomainConfigUIManager($domain_config_ui_manager) {
-    $this->domainConfigUIManager = $domain_config_ui_manager;
+  public function setDomainNegotiator(DomainNegotiatorInterface $domain_negotiator) {
+    $this->domainNegotiator = $domain_negotiator;
   }
 
   /**
@@ -62,7 +63,24 @@ class Config extends CoreConfig {
    */
   protected function getDomainConfigName() {
     // Return selected config name.
-    return $this->domainConfigUIManager->getSelectedConfigName($this->name);
+    $domain = $this->domainNegotiator->getActiveDomain(FALSE);
+    $overrider = $this->domainNegotiator->getDomainConfigOverrider();
+    $configNames = $overrider->getDomainConfigName($this->name, $domain);
+    $language_id = $this->domainNegotiator->getSelectedLanguageId();
+    $domain_id = $this->domainNegotiator->getSelectedDomainId();
+
+    // Use default config name if domain hasn't been selected.
+    if (empty($domain_id)) {
+      return $this->name;
+    }
+
+    // Use domain config name if language hasn't been selected.
+    if (empty($language_id) || $language_id == 'und') {
+      return $configNames['domain'];
+    }
+
+    // Return language config name if language has been selected.
+    return $configNames['langcode'];
   }
 
 }

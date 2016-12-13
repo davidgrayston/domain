@@ -3,7 +3,7 @@ namespace Drupal\domain_config_ui\Config;
 
 use Drupal\Core\Config\ConfigFactory as CoreConfigFactory;
 use Drupal\domain_config_ui\Config\Config;
-use Drupal\domain_config_ui\DomainConfigUIManager;
+use Drupal\domain\DomainNegotiatorInterface;
 
 /**
  * Overrides Drupal\Core\Config\ConfigFactory in order to use our own Config class.
@@ -24,9 +24,9 @@ class ConfigFactory extends CoreConfigFactory {
   /**
    * The Domain config UI manager.
    *
-   * @var DomainConfigUIManager
+   * @var DomainNegotiatorInterface
    */
-  protected $domainConfigUIManager;
+  protected $domainNegotiator;
 
   /**
    * Helper to check if config is allowed to be saved for domain.
@@ -60,19 +60,19 @@ class ConfigFactory extends CoreConfigFactory {
     if (!$immutable && $this->isAllowedDomainConfig($name)) {
       $config = new Config($name, $this->storage, $this->eventDispatcher, $this->typedConfigManager);
       // Pass the UI manager to the Config object.
-      $config->setDomainConfigUIManager($this->domainConfigUIManager);
+      $config->setDomainNegotiator($this->domainNegotiator);
       return $config;
     }
     return parent::createConfigObject($name, $immutable);
   }
 
   /**
-   * Set the Domain config UI manager.
+   * Set the Domain negotiator.
    *
-   * @param DomainConfigUIManager $domain_config_ui_manager
+   * @param DomainNegotiatorInterface $domain_negotiator
    */
-  public function setDomainConfigUIManager($domain_config_ui_manager) {
-    $this->domainConfigUIManager = $domain_config_ui_manager;
+  public function setDomainNegotiator(DomainNegotiatorInterface $domain_negotiator) {
+    $this->domainNegotiator = $domain_negotiator;
   }
 
   /**
@@ -84,7 +84,7 @@ class ConfigFactory extends CoreConfigFactory {
     $list = parent::doLoadMultiple($names, $immutable);
 
     // Do not apply overrides if configuring 'all' domains or config is immutable.
-    if (empty($this->domainConfigUIManager) || !$this->domainConfigUIManager->getSelectedDomainId() || !$this->isAllowedDomainConfig(current($names))) {
+    if (empty($this->domainNegotiator) || !$this->domainNegotiator->getSelectedDomainId() || !$this->isAllowedDomainConfig(current($names))) {
       return $list;
     }
 
@@ -121,7 +121,7 @@ class ConfigFactory extends CoreConfigFactory {
    */
   protected function doGet($name, $immutable = TRUE) {
     // Do not apply overrides if configuring 'all' domains or config is immutable.
-    if (empty($this->domainConfigUIManager) || !$this->domainConfigUIManager->getSelectedDomainId() || !$this->isAllowedDomainConfig($name)) {
+    if (empty($this->domainNegotiator) || !$this->domainNegotiator->getSelectedDomainId() || !$this->isAllowedDomainConfig($name)) {
       return parent::doGet($name, $immutable);
     }
 
@@ -157,6 +157,6 @@ class ConfigFactory extends CoreConfigFactory {
    *   An array of overrides keyed by the configuration object name.
    */
   protected function loadDomainOverrides(array $names) {
-    return $this->domainConfigUIManager->loadOverrides($names);
+    return $this->domainNegotiator->getDomainConfigOverrider()->loadOverrides($names);
   }
 }

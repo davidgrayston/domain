@@ -41,7 +41,7 @@ class SwitchForm extends FormBase {
     ];
 
     // Add domain switch select field.
-    $selected_domain = \Drupal::service('domain_config_ui.manager')->getSelectedDomain();
+    $selected_domain = \Drupal::service('domain.negotiator')->getSelectedDomain();
     $form['domain_config_ui']['config_save_domain'] = [
       '#type' => 'select',
       '#title' => 'Domain',
@@ -53,8 +53,8 @@ class SwitchForm extends FormBase {
     ];
 
     // Add language select field.
-    $selected_language = \Drupal::service('domain_config_ui.manager')->getSelectedLanguage();
-    $language_options = ['' => 'Default'];
+    $selected_language = \Drupal::service('domain.negotiator')->getSelectedLanguage();
+    $language_options = ['und' => 'Default'];
     foreach (\Drupal::languageManager()->getLanguages() as $id => $language) {
       $language_options[$id] = $language->getName();
     }
@@ -86,10 +86,10 @@ class SwitchForm extends FormBase {
    */
   public static function switchCallback(array &$form, FormStateInterface $form_state) {
     // Switch the current domain.
-    \Drupal::service('domain_config_ui.manager')->setSelectedDomain($form_state->getValue('config_save_domain'));
+    \Drupal::service('domain.negotiator')->setSelectedDomain($form_state->getValue('config_save_domain'));
 
     // Switch the current language.
-    \Drupal::service('domain_config_ui.manager')->setSelectedLanguage($form_state->getValue('config_save_language'));
+    \Drupal::service('domain.negotiator')->setSelectedLanguage($form_state->getValue('config_save_language'));
 
     // Extract requesting page URI from ajax URI.
     // Copied from Drupal\Core\Form\FormBuilder::buildFormAction().

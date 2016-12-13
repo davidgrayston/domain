@@ -7,6 +7,7 @@ use Drupal\domain\DomainNegotiatorInterface;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Config\ConfigFactoryOverrideInterface;
 use Drupal\Core\Config\StorageInterface;
+use Drupal\Core\Language\LanguageInterface;
 
 /**
  * Domain-specific config overrides.
@@ -121,7 +122,7 @@ class DomainConfigOverrider implements ConfigFactoryOverrideInterface {
    * @return array
    *   The domain-language, and domain-specific config names.
    */
-  protected function getDomainConfigName($name, DomainInterface $domain) {
+  public function getDomainConfigName($name, DomainInterface $domain) {
     return [
       'langcode' => 'domain.config.' . $domain->id() . '.' . $this->language->getId() . '.' . $name,
       'domain' => 'domain.config.' . $domain->id() . '.' . $name,
@@ -174,9 +175,28 @@ class DomainConfigOverrider implements ConfigFactoryOverrideInterface {
     // into the service created a circular dependency error, so we load from
     // the core service manager.
     $this->languageManager = \Drupal::languageManager();
-    $this->language = $this->languageManager->getCurrentLanguage();
+    if (empty($this->language)) {
+      $this->setLanguage($this->languageManager->getCurrentLanguage());
+    }
     // Get the domain context.
-    $this->domain = $this->domainNegotiator->getActiveDomain(TRUE);
+    $this->setDomain($this->domainNegotiator->getActiveDomain(TRUE));
   }
 
+  /**
+   * Set the domain.
+   *
+   * @param DomainInterface $domain
+   */
+  public function setDomain(DomainInterface $domain) {
+    $this->domain = $domain;
+  }
+
+  /**
+   * Set the language.
+   *
+   * @param LanguageInterface $language
+   */
+  public function setLanguage(LanguageInterface $language) {
+    $this->language = $language;
+  }
 }
