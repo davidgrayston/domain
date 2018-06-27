@@ -7,6 +7,7 @@
 
 use Drupal\Component\Utility\Html;
 use Drupal\domain\DomainInterface;
+use GuzzleHttp\Exception\RequestException;
 
 /**
  * Implements hook_drush_command().
@@ -28,6 +29,7 @@ function domain_drush_command() {
       'drush domain-add example.com \'My Test Site\'',
       'drush domain-add example.com \'My Test Site\' --inactive=1 --https==1',
       'drush domain-add example.com \'My Test Site\' --weight=10',
+      'drush domain-add example.com \'My Test Site\' --validate=1',
     ),
     'arguments' => array(
       'hostname' => 'The domain hostname to register (e.g. example.com).',
@@ -37,7 +39,8 @@ function domain_drush_command() {
       'inactive' => 'Set the domain to inactive status if set.',
       'https' => 'Use https protocol for this domain if set.',
       'weight' => 'Set the order (weight) of the domain.',
-      'is_default' => 'Set this domain as the default domain.'
+      'is_default' => 'Set this domain as the default domain.',
+      'validate' => 'Force a check of the URL response before allowing registration.',
     ),
   );
   $items['domain-delete'] = array(
@@ -69,13 +72,13 @@ function domain_drush_command() {
     'examples' => array(
       'drush domain-default example.com',
       'drush domain-default 1',
-      'drush domain-default 1 --skip_check=1',
+      'drush domain-default 1 --validate=1',
     ),
     'arguments' => array(
       'domain_id' => 'The numeric id or hostname of the domain to make default.',
     ),
     'options' => array(
-      'skip_check' => 'Bypass the domain response test.'
+      'validate' => 'Force a check of the URL response before allowing registration.',
     ),
   );
   $items['domain-disable'] = array(
@@ -168,7 +171,7 @@ function domain_drush_help($section) {
  * Shows the domain list.
  */
 function drush_domain_list() {
-  $domains = \Drupal::service('domain.loader')->loadMultipleSorted(NULL, TRUE);
+  $domains = \Drupal::entityTypeManager()->getStorage('domain')->loadMultipleSorted(NULL, TRUE);
 
   if (empty($domains)) {
     drush_print(dt('No domains have been created. Use drush domain-add to create one.'));
@@ -216,7 +219,7 @@ function drush_domain_list() {
 function drush_domain_generate_domains($primary = 'example.com') {
   // Check the number of domains to create.
   $count = drush_get_option('count');
-  $domains = \Drupal::service('domain.loader')->loadMultiple(NULL, TRUE);
+  $domains = \Drupal::entityTypeManager()->getStorage('domain')->loadMultiple(NULL, TRUE);
   if (empty($count)) {
     $count = 15;
   }
@@ -257,21 +260,20 @@ function drush_domain_generate_domains($primary = 'example.com') {
       $prepared[] = $value;
     }
   }
-  // Add any test domains.
-  if ($count > 15 || empty($prepared)) {
-    // @TODO fix this logic.
-    $start = 1;
-    $j = count($prepared);
-    for ($i = $start + 1; $j <= $count; $i++) {
-      $prepared[] = 'test' . $i . '.' . $primary;
-      $j++;
-    }
+  // Add any test domains that have numeric prefixes. We don't expect these URLs to work,
+  // and mainly use these for testing the user interface.
+  $needed = $count - count($prepared);
+  for ($i = 1; $i <= $needed; $i++) {
+    $prepared[] = 'test' . $i . '.' . $primary;
   }
+
   // Get the initial item weight for sorting.
   $start_weight = count($domains);
   $prepared = array_slice($prepared, 0, $count);
+
+  // Create the domains.
   foreach ($prepared as $key => $item) {
-    $hostname = strtolower($item);
+    $hostname = mb_strtolower($item);
     $values = array(
       'name' => ($item != $primary) ? ucwords(str_replace(".$primary", '', $item)) : \Drupal::config('system.site')->get('name'),
       'hostname' => $hostname,
@@ -279,9 +281,9 @@ function drush_domain_generate_domains($primary = 'example.com') {
       'status' => 1,
       'weight' => ($item != $primary) ? $key + $start_weight + 1 : -1,
       'is_default' => 0,
-      'id' => \Drupal::service('domain.creator')->createMachineName($hostname),
+      'id' => \Drupal::entityTypeManager()->getStorage('domain')->createMachineName($hostname),
     );
-    $domain = \Drupal::service('domain.creator')->createDomain($values);
+    $domain = \Drupal::entityTypeManager()->getStorage('domain')->create($values);
     domain_drush_create($domain);
   }
 
@@ -312,17 +314,17 @@ function drush_domain_generate_domains_validate($primary = 'example.com') {
 /**
  * Adds a new domain.
  *
- * @param $hostname
+ * @param string $hostname
  *   The domain name to register.
- * @param $name
+ * @param string $name
  *   The name to use for this domain.
- *
- * @return
- *   The domain created or an error message.
  */
 function drush_domain_add($hostname, $name) {
-  $start_weight = count(\Drupal::service('domain.loader')->loadMultiple()) + 1;
-  $hostname = strtolower($hostname);
+  $records_count = \Drupal::entityTypeManager()->getStorage('domain')->getQuery()->count()->execute();
+  $start_weight = $records_count + 1;
+  $hostname = mb_strtolower($hostname);
+  /** @var \Drupal\domain\DomainStorageInterface $domain_storage */
+  $domain_storage = \Drupal::entityTypeManager()->getStorage('domain');
   $values = array(
     'hostname' => $hostname,
     'name' => $name,
@@ -330,31 +332,33 @@ function drush_domain_add($hostname, $name) {
     'scheme' => (!drush_get_option('https')) ? 'http' : 'https',
     'weight' => ($weight = drush_get_option('weight')) ? $weight : $start_weight + 1,
     'is_default' => ($is_default = drush_get_option('is_default')) ? $is_default : 0,
-    'id' => \Drupal::service('domain.creator')->createMachineName($hostname),
+    'id' => $domain_storage->createMachineName($hostname),
+    'validate_url' => (drush_get_option('validate')) ? 1 : 0,
   );
-  $domain = \Drupal::service('domain.creator')->createDomain($values);
-  /* TODO: Fix this check.
-  if (!empty($domain->is_default)) {
-    $domain->checkResponse();
-    drush_print($domain->response);
-  }
-  */
+  $domain = $domain_storage->create($values);
   domain_drush_create($domain);
 }
 
 /**
- * Validates the domain add script.
+ * Validates the domain add command arguments.
  *
- * @param $hostname
+ * @param string $hostname
  *   The domain name to register.
- * @param $name
+ * @param string $name
  *   The name to use for this domain.
+ *
+ * @return bool
+ *   TRUE when validation passed, FALSE otherwise.
  */
 function drush_domain_add_validate($hostname, $name) {
-  $error = domain_drush_validate_domain($hostname);
-  if (!empty($error)) {
-    return drush_set_error('domain', $error);
+  $errors = domain_drush_validate_domain($hostname);
+  if (!empty($errors)) {
+    return drush_set_error('domain', $errors);
   }
+  elseif (\Drupal::entityTypeManager()->getStorage('domain')->loadByHostname($hostname)) {
+    return drush_set_error('domain', dt('The hostname is already registered.'));
+  }
+  return TRUE;
 }
 
 /**
@@ -364,12 +368,49 @@ function drush_domain_add_validate($hostname, $name) {
  *   A domain entity.
  */
 function domain_drush_create(DomainInterface $domain) {
-  $domain->save();
-  if ($domain->getDomainId()) {
-    drush_print(dt('Created @name at @domain.', array('@name' => $domain->label(), '@domain' => $domain->getHostname())));
+  if ($error = domain_drush_check_response($domain)) {
+    drush_set_error('hostname', $error);
   }
   else {
-    drush_print(dt('The request could not be completed.'));
+    $domain->save();
+    if ($domain->getDomainId()) {
+      drush_print(dt('Created @name at @domain.', array('@name' => $domain->label(), '@domain' => $domain->getHostname())));
+    }
+    else {
+      drush_print(dt('The request could not be completed.'));
+    }
+  }
+}
+
+/**
+ * Runs a check to ensure that the domain is responsive.
+ *
+ * @param Drupal\domain\DomainInterface $domain
+ *   A domain entity.
+ *
+ * @return string
+ *   An error message if the domain url does not validate. Else empty.
+ */
+function domain_drush_check_response(DomainInterface $domain) {
+  // Check the domain response. First, clear the path value.
+  if ($domain->validate_url) {
+    $domain->setPath();
+    try {
+      $response = $domain->getResponse();
+    }
+    // We cannot know which Guzzle Exception class will be returned; be generic.
+    catch (RequestException $e) {
+      watchdog_exception('domain', $e);
+      // File a general server failure.
+      $domain->setResponse(500);
+    }
+    // If validate_url is set, then we must receive a 200 response.
+    if ($domain->getResponse() != 200) {
+      if (empty($response)) {
+        $response = 500;
+      }
+      return dt('The server request to @url returned a @response response. To proceed, disable the test of the server response by leaving off the --validate flag.', ['@url' => $domain->getPath(), '@response' => $response]);
+    }
   }
 }
 
@@ -379,20 +420,15 @@ function domain_drush_create(DomainInterface $domain) {
  * @param $hostname
  *   The domain name to validate for syntax and uniqueness.
  *
- * @return
+ * @return array
  *   An array of errors encountered.
  *
  * @see domain_validate()
  */
 function domain_drush_validate_domain($hostname) {
-  return;
-  // TODO: Restore this validation.
-  $error = domain_validate($hostname);
-  $output = '';
-  foreach ($error as $msg) {
-    $output .= $msg;
-  }
-  return $output;
+  /** @var \Drupal\domain\DomainValidatorInterface $validator */
+  $validator = \Drupal::service('domain.validator');
+  return $validator->validate($hostname);
 }
 
 /**
@@ -406,7 +442,7 @@ function drush_domain_delete($argument = NULL) {
     drush_set_error('domain', dt('You must specify a domain to delete.'));
   }
   if ($argument == 'all') {
-    $domains = \Drupal::service('domain.loader')->loadMultiple(NULL, TRUE);
+    $domains = \Drupal::entityTypeManager()->getStorage('domain')->loadMultiple(NULL, TRUE);
     if (empty($domains)) {
       drush_print(dt('There are no domains to delete.'));
       return;
@@ -434,7 +470,7 @@ function drush_domain_delete($argument = NULL) {
   return;
 
   // TODO: Set options for re-assigning content.
-  $list = \Drupal::service('domain.loader')->loadMultiple(NULL, TRUE);
+  $list = \Drupal::entityTypeManager()->getStorage('domain')->loadMultiple(NULL, TRUE);
   $options = array('0' => dt('Do not reassign'));
   foreach ($list as $data) {
     if ($data->id() != $domain->id()) {
@@ -469,7 +505,7 @@ function drush_domain_test($argument = NULL) {
     $GLOBALS['base_path'] = '/' . $base_path . '/';
   }
   if (is_null($argument)) {
-    $domains = \Drupal::service('domain.loader')->loadMultiple(NULL, TRUE);
+    $domains = \Drupal::entityTypeManager()->getStorage('domain')->loadMultiple(NULL, TRUE);
   }
   else {
     if ($domain = drush_domain_get_from_argument($argument)) {
@@ -495,19 +531,15 @@ function drush_domain_test($argument = NULL) {
 function drush_domain_default($argument) {
   // Resolve the domain.
   if ($domain = drush_domain_get_from_argument($argument)) {
-    // TODO: Check for domain response.
-    /*
-    $check = drush_get_option('skip_check');
-    if (empty($check)) {
-      $error = domain_check_response($domain, TRUE);
-      if ($error) {
-        drush_set_error($error);
-        drush_print(dt('You may disable this error by passing --skip_check=1.'));
-        return;
-      }
-    }*/
-    $domain->saveDefault();
-    drush_print(dt('!domain set to primary domain.', array('!domain' => $domain->getHostname())));
+    $validate = (drush_get_option('validate')) ? 1 : 0;
+    $domain->addProperty('validate_url', $validate);
+    if ($error = domain_drush_check_response($domain)) {
+      drush_set_error('domain', $error);
+    }
+    else {
+      $domain->saveDefault();
+      drush_print(dt('!domain set to primary domain.', array('!domain' => $domain->getHostname())));
+    }
   }
 }
 
@@ -557,7 +589,7 @@ function drush_domain_name($argument, $name) {
  * Changes a domain machine_name.
  */
 function drush_domain_machine_name($argument, $machine_name) {
-  $machine_name = \Drupal::service('domain.creator')->createMachineName($machine_name);
+  $machine_name = \Drupal::entityTypeManager()->getStorage('domain')->createMachineName($machine_name);
   // Resolve the domain.
   if ($domain = drush_domain_get_from_argument($argument)) {
     $results = \Drupal::entityTypeManager()
@@ -597,9 +629,9 @@ function drush_domain_scheme($argument) {
  * On failure, throws a drush error.
  */
 function drush_domain_get_from_argument($argument) {
-  $domain = \Drupal::service('domain.loader')->load($argument);
+  $domain = \Drupal::entityTypeManager()->getStorage('domain')->load($argument);
   if (!$domain) {
-    $domain = \Drupal::service('domain.loader')->loadByHostname($argument);
+    $domain = \Drupal::entityTypeManager()->getStorage('domain')->loadByHostname($argument);
   }
   if (!$domain) {
     drush_set_error('domain', dt('Domain record not found.'));

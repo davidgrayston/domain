@@ -3,8 +3,8 @@
 namespace Drupal\domain\Controller;
 
 use Drupal\Core\Url;
-use Drupal\domain\DomainInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\domain\DomainInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
@@ -62,10 +62,10 @@ class DomainController {
 
     // Set a message.
     if ($success) {
-      drupal_set_message($message);
+      \Drupal::messenger()->addMessage($message);
     }
     else {
-      drupal_set_message($this->t('The operation failed.'));
+      \Drupal::messenger()->addMessage($this->t('The operation failed.'));
     }
 
     // Return to the invoking page.

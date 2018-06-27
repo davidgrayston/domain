@@ -10,7 +10,7 @@ use Drupal\Core\Session\AccountInterface;
  *
  * @Block(
  *   id = "domain_switcher_block",
- *   admin_label = @Translation("Domain switcher")
+ *   admin_label = @Translation("Domain switcher (for admins and testing)")
  * )
  */
 class DomainSwitcherBlock extends DomainBlockBase {
@@ -25,15 +25,13 @@ class DomainSwitcherBlock extends DomainBlockBase {
 
   /**
    * Build the output.
-   *
-   * @TODO: abstract or theme this function?
    */
   public function build() {
     /** @var \Drupal\domain\DomainInterface $active_domain */
     $active_domain = \Drupal::service('domain.negotiator')->getActiveDomain();
     $items = array();
     /** @var \Drupal\domain\DomainInterface $domain */
-    foreach (\Drupal::service('domain.loader')->loadMultipleSorted() as $domain) {
+    foreach (\Drupal::entityTypeManager()->getStorage('domain')->loadMultipleSorted() as $domain) {
       $string = $domain->getLink();
       if (!$domain->status()) {
         $string .= '*';

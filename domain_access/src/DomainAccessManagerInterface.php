@@ -7,6 +7,7 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\domain\DomainInterface;
 
 /**
  * Checks the access status of entities based on domain settings.
@@ -24,7 +25,7 @@ interface DomainAccessManagerInterface {
    * @return array
    *   The domain access field values.
    */
-  public function getAccessValues(EntityInterface $entity, $field_name = DOMAIN_ACCESS_FIELD);
+  public static function getAccessValues(EntityInterface $entity, $field_name = DOMAIN_ACCESS_FIELD);
 
   /**
    * Get the all affiliates field values from an entity.
@@ -35,7 +36,7 @@ interface DomainAccessManagerInterface {
    * @return bool
    *   Returns TRUE if the entity is sent to all affiliates.
    */
-  public function getAllValue(EntityInterface $entity);
+  public static function getAllValue(EntityInterface $entity);
 
   /**
    * Compare the entity values against a user's account assignments.
@@ -64,16 +65,21 @@ interface DomainAccessManagerInterface {
   public static function getDefaultValue(FieldableEntityInterface $entity, FieldDefinitionInterface $definition);
 
   /**
-   * Get the default all affiliates value for an entity.
+   * Checks that a user belongs to the domain and has a set of permissions.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity being created.
-   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
-   *   The field being created.
+   * @param AccountInterface $account
+   *   The user account.
+   * @param DomainInterface $domain
+   *   The domain being checked.
+   * @param array $permissions
+   *   The relevant permissions to check.
+   * @param string $conjunction
+   *.  The conunction AND|OR to use when checking permssions.
    *
-   * @return array
-   *   The default all affiliates value(s).
+   * @return bool
+   *   Returns TRUE if the user is assigned to the domain and has the necessary
+   *   permissions.
    */
-  public static function getDefaultAllValue(FieldableEntityInterface $entity, FieldDefinitionInterface $definition);
+  public function hasDomainPermissions(AccountInterface $account, DomainInterface $domain, array $permissions, $conjunction = 'AND');
 
 }

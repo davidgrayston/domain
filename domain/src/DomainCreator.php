@@ -6,6 +6,10 @@ namespace Drupal\domain;
  * Creates new domain records.
  *
  * This class is a helper that replaces legacy procedural code.
+ *
+ * @deprecated
+ *  This class will be removed before the 8.1.0 release.
+ *  Use DomainStorage instead, loaded through the EntityTypeManager.
  */
 class DomainCreator implements DomainCreatorInterface {
 
@@ -45,10 +49,9 @@ class DomainCreator implements DomainCreatorInterface {
     if (empty($values)) {
       $values['hostname'] = $this->createHostname();
       $values['name'] = \Drupal::config('system.site')->get('name');
-      $values['id'] = $this->createMachineName($values['hostname']);
     }
     $values += array(
-      'scheme' => empty($GLOBALS['is_https']) ? 'http' : 'https',
+      'scheme' => \Drupal::entityTypeManager()->getStorage('domain')->getDefaultScheme(),
       'status' => 1,
       'weight' => count($domains) + 1,
       'is_default' => (int) empty($default),
