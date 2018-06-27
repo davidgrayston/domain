@@ -2,9 +2,7 @@
 
 namespace Drupal\domain_source;
 
-use Drupal\domain\DomainLoaderInterface;
 use Drupal\domain\DomainElementManager;
-use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 
 /**
@@ -13,7 +11,7 @@ use Drupal\Core\Form\FormStateInterface;
 class DomainSourceElementManager extends DomainElementManager {
 
   /**
-   * @inheritdoc
+   * {@inheritdoc}
    */
   public function disallowedOptions(FormStateInterface $form_state, $field) {
     $options = [];
@@ -26,4 +24,5 @@ class DomainSourceElementManager extends DomainElementManager {
     }
     return array_keys($options);
   }
+
 }

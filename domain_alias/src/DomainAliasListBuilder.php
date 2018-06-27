@@ -21,18 +21,10 @@ class DomainAliasListBuilder extends ConfigEntityListBuilder {
   /**
    * {@inheritdoc}
    */
-  public function getOperations(EntityInterface $entity) {
-    $operations = parent::getOperations($entity);
-    $operations['delete']['href'] = 'admin/config/domain/alias/delete/' . $entity->id();
-    return $operations;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function buildHeader() {
     $header['label'] = $this->t('Pattern');
     $header['redirect'] = $this->t('Redirect');
+    $header['environment'] = $this->t('Environment');
     return $header + parent::buildHeader();
   }
 
@@ -45,6 +37,7 @@ class DomainAliasListBuilder extends ConfigEntityListBuilder {
     $row['label'] = $entity->label();
     $redirect = $entity->getRedirect();
     $row['redirect'] = empty($redirect) ? $this->t('None') : $redirect;
+    $row['environment'] = $entity->getEnvironment();
     $row += parent::buildRow($entity);
 
     return $row;

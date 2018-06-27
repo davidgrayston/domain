@@ -31,7 +31,7 @@ class DomainSettingsForm extends ConfigFormBase {
     $config = $this->config('domain.settings');
     $form['allow_non_ascii'] = array(
       '#type' => 'checkbox',
-      '#title' => $this->t('Allow non-ASCII characters in domains and aliases.'),
+      '#title' => $this->t('Allow non-ASCII characters in domains and aliases'),
       '#default_value' => $config->get('allow_non_ascii'),
       '#description' => $this->t('Domains may be registered with international character sets. Note that not all DNS server respect non-ascii characters.'),
     );
@@ -57,7 +57,7 @@ class DomainSettingsForm extends ConfigFormBase {
       '#rows' => 5,
       '#columns' => 40,
       '#title' => $this->t('Paths that should be accessible for inactive domains'),
-      '#default_value' => $config->get('login_paths', "/user/login\r\n/user/password"),
+      '#default_value' => $config->get('login_paths'),
       '#description' => $this->t('Inactive domains are only accessible to users with permission.
         Enter any paths that should be accessible, one per line. Normally, only the
         login path will be allowed.'),
@@ -69,11 +69,11 @@ class DomainSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    $config = $this->config('domain.settings');
     foreach ($this->settingsKeys() as $key) {
-      $this->config('domain.settings')
-        ->set($key, $form_state->getValue($key));
+      $config->set($key, $form_state->getValue($key));
     }
-    $this->config('domain.settings')->save();
+    $config->save();
     parent::submitForm($form, $form_state);
   }
 
